@@ -4,9 +4,12 @@ dist/
 ios/Pods/
 android/.gradle/
 android/app/build/
+android/
+ios/
 *.log
 .env
 .env.local
 .DS_Store
 *.jks
 *.keystore
+.expo-shared/
