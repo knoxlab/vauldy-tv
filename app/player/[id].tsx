@@ -1,7 +1,7 @@
 import { ResizeMode, Video, type AVPlaybackStatus } from "expo-av";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { ActivityIndicator, StyleSheet, Text, useTVEventHandler, View } from "react-native";
+import { ActivityIndicator, Pressable, StyleSheet, Text, useTVEventHandler, View } from "react-native";
 import { useIsFocused } from "@react-navigation/native";
 import {
   fetchMedia,
@@ -347,7 +347,9 @@ export default function PlayerScreen() {
 
   useTVEventHandler((evt) => {
     if (!isFocused || isAudio || loading || error) return;
+    // Android TV often emits focus/blur noise; ignore those.
     const type = evt.eventType;
+    if (type === "focus" || type === "blur") return;
 
     if (nextEpisodeRef.current) {
       if (type === "left" || type === "right") {
@@ -372,6 +374,7 @@ export default function PlayerScreen() {
       return;
     }
 
+    // Any directional / confirm key shows controls when hidden.
     if (!controlsVisibleRef.current) {
       if (type === "left" || type === "longLeft") {
         showControls();
@@ -383,7 +386,7 @@ export default function PlayerScreen() {
         void seekBy(type === "longRight" ? 30 : 10);
         return;
       }
-      if (type === "up" || type === "down" || type === "select") {
+      if (type === "up" || type === "down" || type === "select" || type === "menu") {
         showControls();
       }
     }
@@ -459,6 +462,25 @@ export default function PlayerScreen() {
         onPlaybackStatusUpdate={onPlaybackStatusUpdate}
         onError={() => setError(t("player.error"))}
       />
+      {/*
+        Android TV: useTVEventHandler only receives keys if at least one focusable
+        view exists. Overlay buttons use focusable={false}, and the bar is hidden
+        while playing — keep a tiny preferred-focus sink mounted always.
+      */}
+      <Pressable
+        focusable
+        hasTVPreferredFocus
+        accessible
+        style={styles.tvEventSink}
+        onPress={() => {
+          if (nextEpisodeRef.current) {
+            if (nextFocusRef.current === 0) goNextEpisode();
+            else cancelNext();
+            return;
+          }
+          if (!controlsVisibleRef.current) showControls();
+        }}
+      />
       <TvVideoPlayerOverlay
         visible={controlsVisible && !overlayVisible}
         title={detail.title || detail.file_path}
@@ -488,6 +510,15 @@ export default function PlayerScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: "#000" },
   video: { flex: 1, width: "100%" },
+  tvEventSink: {
+    position: "absolute",
+    width: 1,
+    height: 1,
+    opacity: 0.01,
+    left: 0,
+    top: 0,
+    zIndex: 1,
+  },
   center: { flex: 1, backgroundColor: "#000", alignItems: "center", justifyContent: "center", gap: 16 },
   loadingText: { color: colors.textSecondary, fontSize: 18 },
   errorText: { color: colors.error, fontSize: 20 },

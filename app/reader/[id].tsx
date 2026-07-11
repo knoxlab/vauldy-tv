@@ -10,6 +10,7 @@ import {
   saveReadProgress,
 } from "@/api/client";
 import LoadingState, { Screen } from "@/components/LoadingState";
+import { useMusicPreviewBar } from "@/hooks/useMusicPreviewBar";
 import { colors, spacing } from "@/constants/theme";
 import { t } from "@/i18n";
 import { documentPreviewSrc, mediaPlaySrc } from "@/lib/mediaUrl";
@@ -21,6 +22,8 @@ export default function ReaderScreen() {
   const [uri, setUri] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [notReady, setNotReady] = useState(false);
+
+  useMusicPreviewBar();
 
   useEffect(() => {
     (async () => {

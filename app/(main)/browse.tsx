@@ -31,16 +31,16 @@ export default function BrowseScreen() {
         {libraries.length === 0 ? (
           <EmptyState />
         ) : (
-          <HorizontalShelf title={t("home.libraries")}>
-            {libraries.map((lib, i) => (
-              <LibraryCard
-                key={lib.id}
-                library={lib}
-                preferredFocus={i === 0}
-                onPress={() => router.push(`/library/${lib.id}`)}
-              />
-            ))}
-          </HorizontalShelf>
+          <HorizontalShelf
+            title={t("home.libraries")}
+            data={libraries}
+            enabled
+            keyExtractor={(lib) => String(lib.id)}
+            onItemPress={(lib) => router.push(`/library/${lib.id}`)}
+            renderItem={(lib, _i, { selected }) => (
+              <LibraryCard library={lib} tvSelected={selected} onPress={() => router.push(`/library/${lib.id}`)} />
+            )}
+          />
         )}
       </ScrollView>
     </Screen>

@@ -5,6 +5,7 @@ import { Image } from "expo-image";
 import { fetchMediaDetail } from "@/api/client";
 import FocusablePressable from "@/components/focus/FocusablePressable";
 import LoadingState from "@/components/LoadingState";
+import { useMusicPreviewBar } from "@/hooks/useMusicPreviewBar";
 import { colors } from "@/constants/theme";
 import { photoMediumSrc } from "@/lib/mediaUrl";
 
@@ -14,6 +15,8 @@ export default function PhotoScreen() {
   const router = useRouter();
   const [uri, setUri] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+
+  useMusicPreviewBar();
 
   useEffect(() => {
     fetchMediaDetail(mediaId)

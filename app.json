@@ -12,7 +12,7 @@
     "splash": {
       "image": "./assets/splash.png",
       "resizeMode": "contain",
-      "backgroundColor": "#0f1419"
+      "backgroundColor": "#f1f6f9"
     },
     "ios": {
       "bundleIdentifier": "com.knoxmedia.vauldy.tv"
@@ -20,9 +20,10 @@
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
-        "backgroundColor": "#0f1419"
+        "backgroundColor": "#f1f6f9"
       },
-      "package": "com.knoxmedia.vauldy.tv"
+      "package": "com.knoxmedia.vauldy.tv",
+      "usesCleartextTraffic": true
     },
     "plugins": [
       [

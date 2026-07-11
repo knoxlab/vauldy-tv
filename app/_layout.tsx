@@ -1,7 +1,10 @@
 import { Stack, useRouter, useSegments } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { useEffect } from "react";
+import { StyleSheet, View } from "react-native";
 import { setUnauthorizedHandler } from "@/api/client";
+import FloatingMusicBar from "@/components/player/FloatingMusicBar";
+import GlobalMusicEngine from "@/components/player/GlobalMusicEngine";
 import { useAuthStore } from "@/store/auth";
 import { useConfigStore } from "@/store/config";
 
@@ -32,7 +35,7 @@ function useProtectedRoute() {
 export default function RootLayout() {
   useProtectedRoute();
   return (
-    <>
+    <View style={styles.root}>
       <StatusBar style="light" />
       <Stack
         screenOptions={{
@@ -50,6 +53,12 @@ export default function RootLayout() {
         <Stack.Screen name="reader/[id]" />
         <Stack.Screen name="photo/[id]" options={{ presentation: "fullScreenModal" }} />
       </Stack>
-    </>
+      <GlobalMusicEngine />
+      <FloatingMusicBar />
+    </View>
   );
 }
+
+const styles = StyleSheet.create({
+  root: { flex: 1 },
+});
