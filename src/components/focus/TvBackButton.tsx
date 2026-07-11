@@ -1,8 +1,9 @@
-import { useCallback, useEffect } from "react";
-import { BackHandler, Pressable, StyleSheet, Text, useTVEventHandler } from "react-native";
+import { useCallback, useEffect, useRef } from "react";
+import { BackHandler, Pressable, StyleSheet, Text } from "react-native";
 import { useIsFocused } from "@react-navigation/native";
 import { colors, radius, spacing } from "@/constants/theme";
 import { TV_NAV_ENABLED } from "@/hooks/useTvRemoteNav";
+import { registerTvKeyHandler, consumeTvKeyEvent, type TvKeyEvent } from "@/hooks/tvKeyDispatcher";
 import { t } from "@/i18n";
 import { useTvFocusStore } from "@/store/tvFocus";
 
@@ -20,30 +21,43 @@ export default function TvBackButton({ onPress, preferredFocus }: Props) {
   const musicBarVisible = useTvFocusStore((s) => s.musicBarVisible);
   const selected = TV_NAV_ENABLED && isFocused && zone === "back";
 
+  // Refs for stable handler.
+  const isFocusedRef = useRef(isFocused);
+  isFocusedRef.current = isFocused;
+  const zoneRef = useRef(zone);
+  zoneRef.current = zone;
+  const onPressRef = useRef(onPress);
+  onPressRef.current = onPress;
+  const setZoneRef = useRef(setZone);
+  setZoneRef.current = setZone;
+
   useEffect(() => {
     if (!TV_NAV_ENABLED || !isFocused) return;
     registerBack(onPress);
     return () => unregisterBack(onPress);
   }, [isFocused, onPress, registerBack, unregisterBack]);
 
-  useTVEventHandler((evt) => {
-    if (!TV_NAV_ENABLED || !isFocused || zone !== "back") return;
-    if (evt.eventType === "select") {
-      onPress();
-      return;
-    }
-    if (evt.eventType === "down" || evt.eventType === "left") {
-      setZone("content");
-      return;
-    }
-    if (evt.eventType === "up") {
-      /* stay on back */
-      return;
-    }
-    if (evt.eventType === "right" && musicBarVisible) {
-      /* optional: stay; music bar is below content */
-    }
-  });
+  useEffect(() => {
+    if (!TV_NAV_ENABLED) return;
+    const handler = (evt: TvKeyEvent) => {
+      if (!isFocusedRef.current || zoneRef.current !== "back") return;
+      if (evt.eventType === "select") {
+        consumeTvKeyEvent(evt);
+        onPressRef.current();
+        return;
+      }
+      if (evt.eventType === "down" || evt.eventType === "left") {
+        consumeTvKeyEvent(evt);
+        setZoneRef.current("content");
+        return;
+      }
+      if (evt.eventType === "up") {
+        consumeTvKeyEvent(evt);
+        return;
+      }
+    };
+    return registerTvKeyHandler(handler);
+  }, []);
 
   return (
     <Pressable

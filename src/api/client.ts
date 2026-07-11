@@ -203,6 +203,11 @@ export async function fetchDocumentPreviewInfo(mediaId: number): Promise<Documen
   return data;
 }
 
+export async function fetchAuthenticatedText(path: string): Promise<string> {
+  const { data } = await api.get<string>(path, { responseType: "text" });
+  return data;
+}
+
 export async function fetchReadProgress(mediaId: number): Promise<ReadProgress | null> {
   const { data } = await api.get<ReadProgress | null>(`/api/v1/media/${mediaId}/read-progress`);
   return data;

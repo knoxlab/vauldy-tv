@@ -1,6 +1,7 @@
 import { useRouter } from "expo-router";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { ScrollView, StyleSheet, Text } from "react-native";
+import { useFocusEffect } from "@react-navigation/native";
 import { fetchLibraries } from "@/api/client";
 import type { Library } from "@/api/types";
 import EmptyState from "@/components/EmptyState";
@@ -9,11 +10,36 @@ import LoadingState, { Screen } from "@/components/LoadingState";
 import LibraryCard from "@/components/media/LibraryCard";
 import { colors, spacing } from "@/constants/theme";
 import { t } from "@/i18n";
+import { useMainContentNav } from "@/hooks/useMainContentNav";
+import type { TvKeyEvent } from "@/hooks/tvKeyDispatcher";
+import { useMusicPlayerStore } from "@/store/musicPlayer";
+import { useTvFocusStore } from "@/store/tvFocus";
 
 export default function BrowseScreen() {
   const router = useRouter();
   const [libraries, setLibraries] = useState<Library[]>([]);
   const [loading, setLoading] = useState(true);
+  const zone = useTvFocusStore((s) => s.zone);
+  const setZone = useTvFocusStore((s) => s.setZone);
+
+  const [itemIndex, setItemIndex] = useState(0);
+
+  const librariesRef = useRef(libraries);
+  librariesRef.current = libraries;
+  const itemIndexRef = useRef(itemIndex);
+  itemIndexRef.current = itemIndex;
+  const routerRef = useRef(router);
+  routerRef.current = router;
+  const setZoneRef = useRef(setZone);
+  setZoneRef.current = setZone;
+
+  useFocusEffect(
+    useCallback(() => {
+      setZone("content");
+      setItemIndex(0);
+      itemIndexRef.current = 0;
+    }, [setZone]),
+  );
 
   useEffect(() => {
     fetchLibraries()
@@ -21,6 +47,45 @@ export default function BrowseScreen() {
       .catch(() => setLibraries([]))
       .finally(() => setLoading(false));
   }, []);
+
+  useMainContentNav(
+    useCallback((evt: TvKeyEvent) => {
+      const type = evt.eventType;
+      if (type === "focus" || type === "blur") return false;
+
+      const count = librariesRef.current.length;
+      if (count === 0) return false;
+
+      if (type === "select") {
+        const lib = librariesRef.current[itemIndexRef.current];
+        if (lib) {
+          useMusicPlayerStore.getState().setLyricsExpanded(false);
+          setZoneRef.current("content");
+          routerRef.current.push(`/library/${lib.id}`);
+        }
+        return true;
+      }
+      if (type === "left") {
+        if (itemIndexRef.current > 0) {
+          const next = itemIndexRef.current - 1;
+          itemIndexRef.current = next;
+          setItemIndex(next);
+        } else {
+          setZoneRef.current("sidebar");
+        }
+        return true;
+      }
+      if (type === "right") {
+        if (itemIndexRef.current < count - 1) {
+          const next = itemIndexRef.current + 1;
+          itemIndexRef.current = next;
+          setItemIndex(next);
+        }
+        return true;
+      }
+      return false;
+    }, []),
+  );
 
   if (loading) return <LoadingState />;
 
@@ -34,11 +99,14 @@ export default function BrowseScreen() {
           <HorizontalShelf
             title={t("home.libraries")}
             data={libraries}
-            enabled
+            focusIndex={zone === "content" ? itemIndex : -1}
             keyExtractor={(lib) => String(lib.id)}
-            onItemPress={(lib) => router.push(`/library/${lib.id}`)}
             renderItem={(lib, _i, { selected }) => (
-              <LibraryCard library={lib} tvSelected={selected} onPress={() => router.push(`/library/${lib.id}`)} />
+              <LibraryCard library={lib} tvSelected={selected} onPress={() => {
+                useMusicPlayerStore.getState().setLyricsExpanded(false);
+                setZone("content");
+                router.push(`/library/${lib.id}`);
+              }} />
             )}
           />
         )}

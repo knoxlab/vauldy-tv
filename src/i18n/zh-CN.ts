@@ -1,5 +1,8 @@
 export default {
   "app.name": "Vauldy",
+  "app.exit_title": "退出应用",
+  "app.exit_message": "确定要退出吗？",
+  "app.exit_confirm": "退出",
   "common.loading": "加载中…",
   "common.retry": "重试",
   "common.cancel": "取消",
@@ -71,7 +74,7 @@ export default {
   "player.stop": "停止",
   "player.no_lyrics": "暂无歌词",
   "player.controls_hint": "左右键快进/快退，确认键播放/暂停，5 秒后自动隐藏",
-  "player.video_nav_hint": "左右键切换按钮，上下键在返回与控制条间移动，确认键执行；无操作 5 秒后隐藏",
+  "player.video_nav_hint": "焦点在进度条时左右键跳转；上键返回，下键到控制按钮；确认键播放/暂停",
   "player.music_nav_hint": "左右键切换按钮，上下键在返回与控制条间移动，确认键执行",
   "music.col_title": "标题",
   "music.col_album_artist": "专辑艺人",

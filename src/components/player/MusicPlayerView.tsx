@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Ionicons } from "@expo/vector-icons";
-import { Pressable, ScrollView, StyleSheet, Text, useTVEventHandler, View } from "react-native";
+import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { useIsFocused } from "@react-navigation/native";
 import { fetchMediaLyrics } from "@/api/client";
 import MusicCoverArt from "@/components/player/MusicCoverArt";
 import { colors, radius, spacing } from "@/constants/theme";
+import { registerTvKeyHandler, consumeTvKeyEvent, type TvKeyEvent } from "@/hooks/tvKeyDispatcher";
 import { t } from "@/i18n";
 import { activeLrcIndex, parseLrc } from "@/lib/lrc";
 
@@ -123,34 +124,48 @@ export default function MusicPlayerView({
     setControlIndex(playIndex);
   }, [playIndex]);
 
-  useTVEventHandler((evt) => {
-    if (!isFocused) return;
-    const type = evt.eventType;
-    if (type === "select") {
-      if (zone === "back") {
-        onBack();
+  const zoneRef = useRef(zone);
+  zoneRef.current = zone;
+  const controlIndexRef = useRef(controlIndex);
+  controlIndexRef.current = controlIndex;
+  const controlsRef = useRef(controls);
+  controlsRef.current = controls;
+
+  useEffect(() => {
+    const handler = (evt: TvKeyEvent) => {
+      if (!isFocused) return;
+      const type = evt.eventType;
+      const z = zoneRef.current;
+      const ci = controlIndexRef.current;
+      consumeTvKeyEvent(evt);
+
+      if (type === "select") {
+        if (z === "back") {
+          onBack();
+          return;
+        }
+        const item = controlsRef.current[ci];
+        if (item && !item.disabled) item.onPress();
         return;
       }
-      const item = controls[controlIndex];
-      if (item && !item.disabled) item.onPress();
-      return;
-    }
-    if (zone === "back") {
-      if (type === "down") setZone("controls");
-      return;
-    }
-    if (type === "up") {
-      setZone("back");
-      return;
-    }
-    if (type === "left") {
-      setControlIndex((i) => (i > 0 ? i - 1 : controls.length - 1));
-      return;
-    }
-    if (type === "right") {
-      setControlIndex((i) => (i < controls.length - 1 ? i + 1 : 0));
-    }
-  });
+      if (z === "back") {
+        if (type === "down") setZone("controls");
+        return;
+      }
+      if (type === "up") {
+        setZone("back");
+        return;
+      }
+      if (type === "left") {
+        setControlIndex((i) => (i > 0 ? i - 1 : controlsRef.current.length - 1));
+        return;
+      }
+      if (type === "right") {
+        setControlIndex((i) => (i < controlsRef.current.length - 1 ? i + 1 : 0));
+      }
+    };
+    return registerTvKeyHandler(handler);
+  }, [isFocused, onBack, setZone]);
 
   const lines = useMemo(() => parseLrc(lrcRaw), [lrcRaw]);
   const activeIdx = activeLrcIndex(lines, position);

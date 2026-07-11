@@ -155,13 +155,16 @@ export default function GlobalMusicEngine() {
   if (!active || !playUri) return null;
 
   return (
-    <View pointerEvents="none" style={styles.hidden}>
+    <View pointerEvents="none" style={styles.hidden} focusable={false} accessible={false}>
       <Video
         ref={videoRef}
         source={{ uri: playUri }}
         style={styles.audio}
         resizeMode={ResizeMode.CONTAIN}
         useNativeControls={false}
+        // Must not steal Android TV focus — otherwise home/browse OK & D-pad die while music plays.
+        focusable={false}
+        accessible={false}
         onPlaybackStatusUpdate={onPlaybackStatusUpdate}
       />
     </View>

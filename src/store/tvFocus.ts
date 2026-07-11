@@ -1,10 +1,20 @@
 import { create } from "zustand";
+import type { TvKeyEvent } from "@/hooks/tvKeyDispatcher";
 
 export type TvFocusZone = "sidebar" | "back" | "content" | "musicbar";
+
+/** Return true when the key was handled. */
+export type TvContentKeyHandler = (evt: TvKeyEvent) => boolean;
 
 type TvFocusState = {
   zone: TvFocusZone;
   setZone: (zone: TvFocusZone) => void;
+  /** Sidebar highlight index (0=home, 1=browse, 2=favorites, 3=settings). */
+  sidebarIndex: number;
+  setSidebarIndex: (index: number) => void;
+  /** Active main-tab content handler — only the focused screen registers. */
+  contentKeyHandler: TvContentKeyHandler | null;
+  setContentKeyHandler: (handler: TvContentKeyHandler | null) => void;
   /** Registered by focused screen's TvBackButton. */
   backHandler: (() => void) | null;
   registerBack: (handler: () => void) => void;
@@ -21,6 +31,10 @@ type TvFocusState = {
 export const useTvFocusStore = create<TvFocusState>((set, get) => ({
   zone: "content",
   setZone: (zone) => set({ zone }),
+  sidebarIndex: 0,
+  setSidebarIndex: (sidebarIndex) => set({ sidebarIndex }),
+  contentKeyHandler: null,
+  setContentKeyHandler: (contentKeyHandler) => set({ contentKeyHandler }),
   backHandler: null,
   registerBack: (handler) => set({ backHandler: handler }),
   unregisterBack: (handler) => {

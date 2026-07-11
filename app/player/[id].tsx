@@ -1,7 +1,7 @@
 import { ResizeMode, Video, type AVPlaybackStatus } from "expo-av";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { ActivityIndicator, Pressable, StyleSheet, Text, useTVEventHandler, View } from "react-native";
+import { ActivityIndicator, Pressable, StyleSheet, Text, View } from "react-native";
 import { useIsFocused } from "@react-navigation/native";
 import {
   fetchMedia,
@@ -13,6 +13,7 @@ import {
 } from "@/api/client";
 import type { MediaDetail } from "@/api/types";
 import { useTvBackHandler } from "@/components/focus/TvBackButton";
+import { registerTvKeyHandler, consumeTvKeyEvent, type TvKeyEvent } from "@/hooks/tvKeyDispatcher";
 import FocusablePressable from "@/components/focus/FocusablePressable";
 import MusicPlayerView from "@/components/player/MusicPlayerView";
 import NextEpisodeOverlay from "@/components/player/NextEpisodeOverlay";
@@ -87,6 +88,11 @@ export default function PlayerScreen() {
   const musicPlaying = useMusicPlayerStore((s) => s.playing);
   const musicPosition = useMusicPlayerStore((s) => s.position);
   const musicDuration = useMusicPlayerStore((s) => s.duration);
+  const musicMediaId = useMusicPlayerStore((s) => s.mediaId);
+  const musicTitle = useMusicPlayerStore((s) => s.title);
+  const musicArtist = useMusicPlayerStore((s) => s.artist);
+  const musicAlbumTitle = useMusicPlayerStore((s) => s.albumTitle);
+  const musicCoverUri = useMusicPlayerStore((s) => s.coverUri);
   const musicToggle = useMusicPlayerStore((s) => s.toggle);
   const musicSeekBy = useMusicPlayerStore((s) => s.seekBy);
   const musicStop = useMusicPlayerStore((s) => s.stop);
@@ -102,17 +108,32 @@ export default function PlayerScreen() {
     return () => setMusicFullscreen(false);
   }, [setMusicFullscreen]);
 
+  // Keep the player route in sync when the queue advances (next/prev/auto),
+  // so lyrics and metadata follow the current track.
+  useEffect(() => {
+    if (!isAudio || !musicMediaId || musicMediaId === mediaId) return;
+    router.replace(`/player/${musicMediaId}`);
+  }, [isAudio, musicMediaId, mediaId, router]);
+
   useEffect(() => {
     didResumeSeek.current = false;
     setNextEpisode(null);
     setNextCountdown(0);
     setNextFocus(0);
-    setLoading(true);
-    setError(null);
-    setUri(null);
-    setDetail(null);
     lastPosition.current = 0;
     lastSavedPosition.current = 0;
+
+    // Soft handoff: store already advanced to this track — keep MusicPlayerView mounted
+    // so lyrics/title update without flashing the loading screen.
+    const music = useMusicPlayerStore.getState();
+    const softAudioHandoff =
+      music.active && music.mediaId === mediaId && (isAudioRef.current || music.fullscreen);
+    if (!softAudioHandoff) {
+      setLoading(true);
+      setError(null);
+      setUri(null);
+      setDetail(null);
+    }
   }, [mediaId]);
 
   useEffect(() => {
@@ -153,10 +174,10 @@ export default function PlayerScreen() {
             "";
           const playUri = mediaPlaySrc(mediaId);
           setUri(playUri);
-          useMusicPlayerStore.getState().setLyricsExpanded(false);
 
           const current = useMusicPlayerStore.getState();
           if (!(current.active && current.mediaId === mediaId)) {
+            useMusicPlayerStore.getState().setLyricsExpanded(false);
             useMusicPlayerStore.getState().start({
               mediaId,
               title: enriched.title || enriched.file_path,
@@ -345,52 +366,54 @@ export default function PlayerScreen() {
 
   useTvBackHandler(handleHardwareBack);
 
-  useTVEventHandler((evt) => {
-    if (!isFocused || isAudio || loading || error) return;
-    // Android TV often emits focus/blur noise; ignore those.
-    const type = evt.eventType;
-    if (type === "focus" || type === "blur") return;
+  useEffect(() => {
+    const handler = (evt: TvKeyEvent) => {
+      if (!isFocused || isAudio || loading || error) return;
+      const type = evt.eventType;
+      if (type === "focus" || type === "blur") return;
+      consumeTvKeyEvent(evt);
 
-    if (nextEpisodeRef.current) {
-      if (type === "left" || type === "right") {
-        setNextFocus((i) => (i === 0 ? 1 : 0));
+      if (nextEpisodeRef.current) {
+        if (type === "left" || type === "right") {
+          setNextFocus((i) => (i === 0 ? 1 : 0));
+          return;
+        }
+        if (type === "select") {
+          if (nextFocusRef.current === 0) goNextEpisode();
+          else cancelNext();
+          return;
+        }
+        if (type === "menu") {
+          cancelNext();
+          return;
+        }
         return;
       }
-      if (type === "select") {
-        if (nextFocusRef.current === 0) goNextEpisode();
-        else cancelNext();
-        return;
-      }
-      if (type === "menu") {
-        cancelNext();
-        return;
-      }
-      return;
-    }
 
-    if (type === "playPause") {
-      showControls();
-      void toggleVideoPlay();
-      return;
-    }
+      if (type === "playPause") {
+        showControls();
+        void toggleVideoPlay();
+        return;
+      }
 
-    // Any directional / confirm key shows controls when hidden.
-    if (!controlsVisibleRef.current) {
-      if (type === "left" || type === "longLeft") {
-        showControls();
-        void seekBy(type === "longLeft" ? -30 : -10);
-        return;
+      if (!controlsVisibleRef.current) {
+        if (type === "left" || type === "longLeft") {
+          showControls();
+          void seekBy(type === "longLeft" ? -30 : -10);
+          return;
+        }
+        if (type === "right" || type === "longRight") {
+          showControls();
+          void seekBy(type === "longRight" ? 30 : 10);
+          return;
+        }
+        if (type === "up" || type === "down" || type === "select" || type === "menu") {
+          showControls();
+        }
       }
-      if (type === "right" || type === "longRight") {
-        showControls();
-        void seekBy(type === "longRight" ? 30 : 10);
-        return;
-      }
-      if (type === "up" || type === "down" || type === "select" || type === "menu") {
-        showControls();
-      }
-    }
-  });
+    };
+    return registerTvKeyHandler(handler);
+  }, [isFocused, isAudio, loading, error, showControls, toggleVideoPlay, seekBy, goNextEpisode, cancelNext]);
 
   const handleStop = () => {
     musicStop();
@@ -427,13 +450,14 @@ export default function PlayerScreen() {
     "";
 
   if (isAudio) {
+    const viewMediaId = musicMediaId ?? mediaId;
     return (
       <MusicPlayerView
-        mediaId={mediaId}
-        title={detail.title || detail.file_path}
-        artist={artist}
-        albumTitle={albumTitle}
-        coverUri={coverUri}
+        mediaId={viewMediaId}
+        title={musicTitle || detail.title || detail.file_path}
+        artist={musicArtist || artist}
+        albumTitle={musicAlbumTitle || albumTitle}
+        coverUri={musicCoverUri || coverUri}
         playing={musicPlaying}
         position={musicPosition}
         duration={musicDuration}

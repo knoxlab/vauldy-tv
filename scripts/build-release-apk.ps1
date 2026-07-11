@@ -8,7 +8,11 @@ $env:EXPO_TV = "1"
 $env:ANDROID_HOME = "K:\Android\Sdk"
 $env:ANDROID_SDK_ROOT = "K:\Android\Sdk"
 $env:JAVA_HOME = "C:\Program Files\Microsoft\jdk-17.0.19.10-hotspot"
+$gradleHome = "E:\g"
+New-Item -ItemType Directory -Force -Path $gradleHome | Out-Null
+$env:GRADLE_USER_HOME = $gradleHome
 $env:Path = @(
+  "$env:JAVA_HOME\bin",
   "$env:ANDROID_HOME\platform-tools",
   "$env:ANDROID_HOME\emulator",
   "$env:ANDROID_HOME\cmdline-tools\latest\bin",

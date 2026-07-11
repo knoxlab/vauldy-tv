@@ -1,5 +1,5 @@
-import { useEffect, useMemo } from "react";
-import { useRouter, useSegments } from "expo-router";
+import { useEffect, useMemo, useRef } from "react";
+import { useSegments } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import MusicCoverArt from "@/components/player/MusicCoverArt";
@@ -26,7 +26,6 @@ type BarAction = {
 };
 
 export default function FloatingMusicBar() {
-  const router = useRouter();
   const segments = useSegments();
   const inAuth = segments[0] === "login" || segments[0] === "setup";
   const onPlayerScreen = segments[0] === "player";
@@ -78,14 +77,6 @@ export default function FloatingMusicBar() {
         onPress: () => setLyricsExpanded(!lyricsExpanded),
       },
       {
-        key: "open",
-        icon: "musical-notes",
-        onPress: () => {
-          setLyricsExpanded(false);
-          router.push(`/player/${mediaId}`);
-        },
-      },
-      {
         key: "prev",
         icon: "play-skip-back",
         onPress: prev,
@@ -119,7 +110,6 @@ export default function FloatingMusicBar() {
     next,
     playing,
     prev,
-    router,
     setLyricsExpanded,
     stop,
     toggle,
@@ -127,22 +117,39 @@ export default function FloatingMusicBar() {
 
   const playIndex = Math.max(0, actions.findIndex((a) => a.key === "play"));
   const barActive = TV_NAV_ENABLED && barVisible && zone === "musicbar";
+  const actionsRef = useRef(actions);
+  actionsRef.current = actions;
+  const wasBarActive = useRef(false);
 
-  const { index: focusIndex } = useTvRemoteNav({
+  const { index: focusIndex, setIndex } = useTvRemoteNav({
     mode: "controls",
     count: actions.length,
     initialIndex: playIndex,
     requireScreenFocus: false,
     enabled: barActive,
-    loop: true,
+    loop: false,
     onSelect: (i) => {
-      const action = actions[i];
+      const action = actionsRef.current[i];
       if (action && !action.disabled) action.onPress();
     },
-    onExitUp: () => {
+    onExitLeft: () => {
+      setLyricsExpanded(false);
       setZone("content");
     },
+    onExitUp: () => {
+      setLyricsExpanded(!lyricsExpanded);
+    },
+    onExitDown: () => {
+      setLyricsExpanded(!lyricsExpanded);
+    },
   });
+
+  useEffect(() => {
+    if (barActive && !wasBarActive.current) {
+      setIndex(playIndex);
+    }
+    wasBarActive.current = barActive;
+  }, [barActive, playIndex, setIndex]);
 
   if (!barVisible || !mediaId) return null;
 

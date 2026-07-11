@@ -12,7 +12,9 @@
     "apk:release:arm64": "powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/build-release-apk.ps1 -Arch arm64-v8a",
     "apk:release:armv7": "powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/build-release-apk.ps1 -Arch armeabi-v7a",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run"
+    "test": "vitest run",
+    "embed-pdfjs": "node scripts/embed-pdfjs.mjs",
+    "postinstall": "node scripts/embed-pdfjs.mjs"
   },
   "dependencies": {
     "@expo/metro-runtime": "~4.0.1",
@@ -30,6 +32,7 @@
     "expo-router": "~4.0.20",
     "expo-secure-store": "~14.0.1",
     "expo-status-bar": "~2.0.1",
+    "pdfjs-dist": "3.11.174",
     "react": "18.3.1",
     "react-dom": "18.3.1",
     "react-native": "npm:react-native-tvos@0.76.9-0",

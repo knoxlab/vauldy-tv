@@ -1,5 +1,8 @@
 export default {
   "app.name": "Vauldy",
+  "app.exit_title": "Exit App",
+  "app.exit_message": "Are you sure you want to exit?",
+  "app.exit_confirm": "Exit",
   "common.loading": "Loading…",
   "common.retry": "Retry",
   "common.cancel": "Cancel",
@@ -71,7 +74,7 @@ export default {
   "player.stop": "Stop",
   "player.no_lyrics": "No lyrics available",
   "player.controls_hint": "Left/right to seek, OK to play/pause. Hides after 5s.",
-  "player.video_nav_hint": "Left/right between buttons, up/down for back vs controls, OK to activate. Hides after 5s.",
+  "player.video_nav_hint": "On progress: left/right seek; up=back, down=buttons; OK toggles play",
   "player.music_nav_hint": "Left/right between buttons, up/down for back vs controls, OK to activate",
   "music.col_title": "Title",
   "music.col_album_artist": "Album Artist",

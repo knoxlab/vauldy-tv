@@ -1,5 +1,5 @@
 import { useRouter } from "expo-router";
-import { useEffect, useMemo, useRef, useState, useCallback } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { FlatList, StyleSheet, Text, useWindowDimensions, View } from "react-native";
 import { fetchFavorites } from "@/api/client";
 import type { MediaItem } from "@/api/types";
@@ -8,7 +8,8 @@ import LoadingState, { Screen } from "@/components/LoadingState";
 import MediaCard from "@/components/media/MediaCard";
 import { colors, spacing } from "@/constants/theme";
 import { SIDEBAR_WIDTH } from "@/constants/layout";
-import { useTvRemoteNav } from "@/hooks/useTvRemoteNav";
+import { useMainContentNav } from "@/hooks/useMainContentNav";
+import type { TvKeyEvent } from "@/hooks/tvKeyDispatcher";
 import { useTvFocusStore } from "@/store/tvFocus";
 import { t } from "@/i18n";
 
@@ -22,6 +23,13 @@ export default function FavoritesScreen() {
   const [items, setItems] = useState<MediaItem[]>([]);
   const [loading, setLoading] = useState(true);
   const listRef = useRef<FlatList<MediaItem[]>>(null);
+
+  const zone = useTvFocusStore((s) => s.zone);
+  const setZone = useTvFocusStore((s) => s.setZone);
+  const exitContentUp = useTvFocusStore((s) => s.exitContentUp);
+  const exitContentDown = useTvFocusStore((s) => s.exitContentDown);
+
+  const [focusIndex, setFocusIndex] = useState(0);
 
   const itemWidth = useMemo(() => {
     const horizontalPadding = spacing.lg * 2;
@@ -37,38 +45,26 @@ export default function FavoritesScreen() {
     return rows;
   }, [items]);
 
+  // Refs for stable handler access.
+  const itemsRef = useRef(items);
+  itemsRef.current = items;
+  const focusIndexRef = useRef(focusIndex);
+  focusIndexRef.current = focusIndex;
+  const routerRef = useRef(router);
+  routerRef.current = router;
+  const setZoneRef = useRef(setZone);
+  setZoneRef.current = setZone;
+  const exitContentUpRef = useRef(exitContentUp);
+  exitContentUpRef.current = exitContentUp;
+  const exitContentDownRef = useRef(exitContentDown);
+  exitContentDownRef.current = exitContentDown;
+  const listRefRef = useRef(listRef);
+  listRefRef.current = listRef;
+
   const scrollToItem = useCallback((index: number) => {
     const row = Math.floor(index / GRID_COLUMNS);
-    listRef.current?.scrollToIndex({ index: row, animated: true, viewPosition: 0.35 });
+    listRefRef.current.current?.scrollToIndex({ index: row, animated: true, viewPosition: 0.35 });
   }, []);
-
-  const openItem = useCallback((item: MediaItem) => {
-    router.push(`/media/${item.id}`);
-  }, [router]);
-
-  const zone = useTvFocusStore((s) => s.zone);
-  const setZone = useTvFocusStore((s) => s.setZone);
-  const exitContentUp = useTvFocusStore((s) => s.exitContentUp);
-  const exitContentDown = useTvFocusStore((s) => s.exitContentDown);
-
-  const { index: focusIndex } = useTvRemoteNav({
-    mode: "grid",
-    columns: GRID_COLUMNS,
-    count: items.length,
-    enabled: zone === "content",
-    onSelect: (i) => {
-      const item = items[i];
-      if (item) openItem(item);
-    },
-    onIndexChange: scrollToItem,
-    onExitLeft: () => setZone("sidebar"),
-    onExitUp: () => {
-      exitContentUp();
-    },
-    onExitDown: () => {
-      exitContentDown();
-    },
-  });
 
   useEffect(() => {
     fetchFavorites()
@@ -76,6 +72,71 @@ export default function FavoritesScreen() {
       .catch(() => setItems([]))
       .finally(() => setLoading(false));
   }, []);
+
+  useMainContentNav(
+    useCallback((evt: TvKeyEvent) => {
+      const type = evt.eventType;
+      if (type === "focus" || type === "blur") return false;
+
+      const count = itemsRef.current.length;
+      if (count === 0) return false;
+
+      const cur = focusIndexRef.current;
+      const columns = GRID_COLUMNS;
+      const row = Math.floor(cur / columns);
+      const col = cur % columns;
+      const maxRow = Math.floor((count - 1) / columns);
+
+      if (type === "select") {
+        const item = itemsRef.current[cur];
+        if (item) routerRef.current.push(`/media/${item.id}`);
+        return true;
+      }
+      if (type === "left") {
+        if (col > 0) {
+          const next = cur - 1;
+          focusIndexRef.current = next;
+          setFocusIndex(next);
+          scrollToItem(next);
+        } else {
+          setZoneRef.current("sidebar");
+        }
+        return true;
+      }
+      if (type === "right") {
+        if (col < columns - 1 && cur + 1 < count) {
+          const next = cur + 1;
+          focusIndexRef.current = next;
+          setFocusIndex(next);
+          scrollToItem(next);
+        }
+        return true;
+      }
+      if (type === "up") {
+        if (row > 0) {
+          const next = cur - columns;
+          focusIndexRef.current = next;
+          setFocusIndex(next);
+          scrollToItem(next);
+        } else {
+          exitContentUpRef.current();
+        }
+        return true;
+      }
+      if (type === "down") {
+        if (row < maxRow && cur + columns < count) {
+          const next = cur + columns;
+          focusIndexRef.current = next;
+          setFocusIndex(next);
+          scrollToItem(next);
+        } else {
+          exitContentDownRef.current();
+        }
+        return true;
+      }
+      return false;
+    }, [scrollToItem]),
+  );
 
   if (loading) return <LoadingState />;
 
@@ -104,8 +165,8 @@ export default function FavoritesScreen() {
                   <MediaCard
                     item={item}
                     layout="grid"
-                    tvSelected={focusIndex >= 0 && focusIndex === itemIndex}
-                    onPress={() => openItem(item)}
+                    tvSelected={zone === "content" && focusIndex >= 0 && focusIndex === itemIndex}
+                    onPress={() => router.push(`/media/${item.id}`)}
                   />
                 </View>
               );

@@ -1,8 +1,9 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Ionicons } from "@expo/vector-icons";
-import { Pressable, StyleSheet, Text, useTVEventHandler, View } from "react-native";
+import { Pressable, StyleSheet, Text, View } from "react-native";
 import { useIsFocused } from "@react-navigation/native";
 import { colors, radius, spacing } from "@/constants/theme";
+import { registerTvKeyHandler, consumeTvKeyEvent, type TvKeyEvent } from "@/hooks/tvKeyDispatcher";
 import { t } from "@/i18n";
 
 function formatTime(sec: number): string {
@@ -22,6 +23,8 @@ type ControlItem = {
   onPress: () => void;
   primary?: boolean;
 };
+
+type FocusZone = "back" | "progress" | "controls";
 
 type Props = {
   visible: boolean;
@@ -49,22 +52,15 @@ export default function TvVideoPlayerOverlay({
   onInteraction,
 }: Props) {
   const isFocused = useIsFocused();
-  const [zone, setZone] = useState<"back" | "controls">("controls");
+  const [zone, setZone] = useState<FocusZone>("progress");
   const [controlIndex, setControlIndex] = useState(0);
 
   const controls = useMemo<ControlItem[]>(
     () => [
       {
-        key: "rewind30",
+        key: "rewind",
         icon: "play-back",
         iconSize: 28,
-        label: "30s",
-        onPress: () => onSeekBy(-30),
-      },
-      {
-        key: "rewind10",
-        icon: "play-back",
-        iconSize: 24,
         label: "10s",
         onPress: () => onSeekBy(-10),
       },
@@ -76,18 +72,11 @@ export default function TvVideoPlayerOverlay({
         primary: true,
       },
       {
-        key: "forward10",
-        icon: "play-forward",
-        iconSize: 24,
-        label: "10s",
-        onPress: () => onSeekBy(10),
-      },
-      {
-        key: "forward30",
+        key: "forward",
         icon: "play-forward",
         iconSize: 28,
-        label: "30s",
-        onPress: () => onSeekBy(30),
+        label: "10s",
+        onPress: () => onSeekBy(10),
       },
       {
         key: "stop",
@@ -100,46 +89,84 @@ export default function TvVideoPlayerOverlay({
     [onSeekBy, onStop, onTogglePlay, playing],
   );
 
-  const playIndex = Math.max(0, controls.findIndex((c) => c.key === "play"));
-
   useEffect(() => {
     if (visible) {
-      setZone("controls");
-      setControlIndex(playIndex);
+      setZone("progress");
+      setControlIndex(0);
     }
-  }, [visible, playIndex]);
+  }, [visible]);
 
-  useTVEventHandler((evt) => {
-    if (!isFocused || !visible) return;
-    const type = evt.eventType;
-    onInteraction();
+  const zoneRef = useRef(zone);
+  zoneRef.current = zone;
+  const controlIndexRef = useRef(controlIndex);
+  controlIndexRef.current = controlIndex;
+  const controlsRef = useRef(controls);
+  controlsRef.current = controls;
 
-    if (type === "select") {
-      if (zone === "back") {
-        onBack();
+  useEffect(() => {
+    const handler = (evt: TvKeyEvent) => {
+      if (!isFocused || !visible) return;
+      const type = evt.eventType;
+      if (type === "focus" || type === "blur") return;
+      consumeTvKeyEvent(evt);
+      onInteraction();
+
+      const z = zoneRef.current;
+      const ci = controlIndexRef.current;
+
+      if (type === "select") {
+        if (z === "back") {
+          onBack();
+          return;
+        }
+        if (z === "progress") {
+          onTogglePlay();
+          return;
+        }
+        controlsRef.current[ci]?.onPress();
         return;
       }
-      controls[controlIndex]?.onPress();
-      return;
-    }
 
-    if (zone === "back") {
-      if (type === "down" || type === "right") setZone("controls");
-      return;
-    }
+      if (z === "back") {
+        if (type === "down") setZone("progress");
+        return;
+      }
 
-    if (type === "up") {
-      setZone("back");
-      return;
-    }
-    if (type === "left") {
-      setControlIndex((i) => (i > 0 ? i - 1 : controls.length - 1));
-      return;
-    }
-    if (type === "right") {
-      setControlIndex((i) => (i < controls.length - 1 ? i + 1 : 0));
-    }
-  });
+      if (z === "progress") {
+        if (type === "left" || type === "longLeft") {
+          onSeekBy(type === "longLeft" ? -30 : -10);
+          return;
+        }
+        if (type === "right" || type === "longRight") {
+          onSeekBy(type === "longRight" ? 30 : 10);
+          return;
+        }
+        if (type === "up") {
+          setZone("back");
+          return;
+        }
+        if (type === "down") {
+          setZone("controls");
+          setControlIndex(0);
+        }
+        return;
+      }
+
+      // controls zone
+      if (type === "up") {
+        setZone("progress");
+        return;
+      }
+      if (type === "left") {
+        setControlIndex((i) => (i > 0 ? i - 1 : controlsRef.current.length - 1));
+        return;
+      }
+      if (type === "right") {
+        setControlIndex((i) => (i < controlsRef.current.length - 1 ? i + 1 : 0));
+      }
+    };
+    return registerTvKeyHandler(handler);
+  }, [isFocused, visible, onInteraction, onBack, onTogglePlay, onSeekBy]);
 
   if (!visible) return null;
 
@@ -162,7 +189,7 @@ export default function TvVideoPlayerOverlay({
       </View>
 
       <View style={styles.bottom}>
-        <View style={styles.progressTrack}>
+        <View style={[styles.progressTrack, zone === "progress" && styles.progressTrackSelected]}>
           <View style={[styles.progressFill, { width: `${progress}%` }]} />
         </View>
         <Text style={styles.timeText}>
@@ -235,10 +262,16 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
   },
   progressTrack: {
-    height: 8,
-    borderRadius: 4,
+    height: 10,
+    borderRadius: 5,
     backgroundColor: "rgba(255,255,255,0.2)",
     overflow: "hidden",
+    borderWidth: 2,
+    borderColor: "transparent",
+  },
+  progressTrackSelected: {
+    borderColor: colors.brand,
+    backgroundColor: "rgba(255,255,255,0.28)",
   },
   progressFill: { height: "100%", backgroundColor: colors.accent },
   timeText: { color: colors.text, fontSize: 18, textAlign: "center" },

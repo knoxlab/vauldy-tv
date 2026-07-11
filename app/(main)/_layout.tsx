@@ -1,6 +1,7 @@
 import { Slot, usePathname } from "expo-router";
 import { useEffect } from "react";
 import { StyleSheet, View } from "react-native";
+import MainShellTvNav from "@/components/MainShellTvNav";
 import Sidebar from "@/components/Sidebar";
 import { colors } from "@/constants/theme";
 import { useTvFocusStore } from "@/store/tvFocus";
@@ -16,6 +17,7 @@ export default function MainLayout() {
 
   return (
     <View style={styles.root}>
+      <MainShellTvNav />
       <Sidebar />
       <View style={styles.content}>
         <Slot />

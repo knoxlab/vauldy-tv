@@ -42,6 +42,7 @@ export default function LibraryScreen() {
 
   const goBack = useCallback(() => router.back(), [router]);
   useTvBackHandler(goBack);
+  const zone = useTvFocusStore((s) => s.zone);
   const setZone = useTvFocusStore((s) => s.setZone);
 
   useFocusEffect(
@@ -59,6 +60,10 @@ export default function LibraryScreen() {
 
   const gridAspect = libraryGridAspect(library);
   const listRef = useRef<FlatList<(MediaItem | SeriesSummary)[]>>(null);
+  const seriesItemsRef = useRef(seriesItems);
+  const itemsRef = useRef(items);
+  seriesItemsRef.current = seriesItems;
+  itemsRef.current = items;
 
   const scrollToItem = useCallback((index: number) => {
     const row = Math.floor(index / GRID_COLUMNS);
@@ -81,14 +86,14 @@ export default function LibraryScreen() {
     mode: "grid",
     columns: GRID_COLUMNS,
     count: isMusicLibrary ? 0 : isTVLibrary ? seriesItems.length : items.length,
-    enabled: !isMusicLibrary,
+    enabled: !isMusicLibrary && zone === "content",
     onSelect: (i) => {
       if (isTVLibrary) {
-        const series = seriesItems[i];
+        const series = seriesItemsRef.current[i];
         if (series) openSeries(series);
         return;
       }
-      const item = items[i];
+      const item = itemsRef.current[i];
       if (item) openItem(item);
     },
     onIndexChange: scrollToItem,

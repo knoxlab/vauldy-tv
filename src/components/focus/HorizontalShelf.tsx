@@ -1,12 +1,9 @@
-import { useCallback, useRef } from "react";
+import { useCallback, useEffect, useRef } from "react";
 import { FlatList, StyleSheet, Text, View, type ListRenderItemInfo } from "react-native";
 import { colors, spacing } from "@/constants/theme";
-import { useTvRemoteNav } from "@/hooks/useTvRemoteNav";
-import { useTvFocusStore } from "@/store/tvFocus";
 
 export type ShelfRenderCtx = {
   selected: boolean;
-  scrollIntoView: () => void;
 };
 
 type Props<T> = {
@@ -14,12 +11,9 @@ type Props<T> = {
   data: readonly T[];
   keyExtractor: (item: T, index: number) => string;
   renderItem: (item: T, index: number, ctx: ShelfRenderCtx) => React.ReactNode;
-  onItemPress?: (item: T, index: number) => void;
   empty?: React.ReactNode;
-  enabled?: boolean;
-  onExitLeft?: () => void;
-  onExitUp?: () => void;
-  onExitDown?: () => void;
+  /** External focus index (-1 = no focus). */
+  focusIndex?: number;
 };
 
 export default function HorizontalShelf<T>({
@@ -27,18 +21,10 @@ export default function HorizontalShelf<T>({
   data,
   keyExtractor,
   renderItem,
-  onItemPress,
   empty,
-  enabled = true,
-  onExitLeft,
-  onExitUp,
-  onExitDown,
+  focusIndex = -1,
 }: Props<T>) {
   const listRef = useRef<FlatList<T>>(null);
-  const zone = useTvFocusStore((s) => s.zone);
-  const setZone = useTvFocusStore((s) => s.setZone);
-  const exitContentUp = useTvFocusStore((s) => s.exitContentUp);
-  const exitContentDown = useTvFocusStore((s) => s.exitContentDown);
 
   const scrollToIndex = useCallback(
     (index: number) => {
@@ -48,34 +34,20 @@ export default function HorizontalShelf<T>({
     [data.length],
   );
 
-  const { index: focusIndex } = useTvRemoteNav({
-    mode: "horizontal",
-    count: data.length,
-    enabled: enabled && data.length > 0 && zone === "content",
-    onSelect: (i) => {
-      const item = data[i];
-      if (item !== undefined) onItemPress?.(item, i);
-    },
-    onIndexChange: scrollToIndex,
-    onExitLeft: onExitLeft ?? (() => setZone("sidebar")),
-    onExitUp: onExitUp ?? (() => {
-      exitContentUp();
-    }),
-    onExitDown: onExitDown ?? (() => {
-      exitContentDown();
-    }),
-  });
+  // Scroll when focus changes.
+  useEffect(() => {
+    if (focusIndex >= 0) scrollToIndex(focusIndex);
+  }, [focusIndex, scrollToIndex]);
 
   const renderListItem = useCallback(
     ({ item, index }: ListRenderItemInfo<T>) => (
       <View style={styles.item}>
         {renderItem(item, index, {
           selected: focusIndex >= 0 && focusIndex === index,
-          scrollIntoView: () => scrollToIndex(index),
         })}
       </View>
     ),
-    [focusIndex, renderItem, scrollToIndex],
+    [focusIndex, renderItem],
   );
 
   return (

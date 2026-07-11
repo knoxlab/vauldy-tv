@@ -1,5 +1,5 @@
 import { useRouter } from "expo-router";
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { ScrollView, StyleSheet, Text } from "react-native";
 import { useFocusEffect } from "@react-navigation/native";
 import { fetchContinueWatchingHistory, fetchLibraries, fetchMedia } from "@/api/client";
@@ -10,7 +10,10 @@ import LibraryCard from "@/components/media/LibraryCard";
 import MediaCard from "@/components/media/MediaCard";
 import { colors, spacing } from "@/constants/theme";
 import { t } from "@/i18n";
+import { useMainContentNav } from "@/hooks/useMainContentNav";
+import type { TvKeyEvent } from "@/hooks/tvKeyDispatcher";
 import { useConfigStore } from "@/store/config";
+import { useMusicPlayerStore } from "@/store/musicPlayer";
 import { useTvFocusStore } from "@/store/tvFocus";
 
 function historyToMediaItem(h: HistoryItem): MediaItem {
@@ -39,9 +42,47 @@ export default function HomeScreen() {
   const [history, setHistory] = useState<HistoryItem[]>([]);
   const [recent, setRecent] = useState<MediaItem[]>([]);
   const [loading, setLoading] = useState(true);
+
   const zone = useTvFocusStore((s) => s.zone);
+  const setZone = useTvFocusStore((s) => s.setZone);
   const exitContentUp = useTvFocusStore((s) => s.exitContentUp);
   const exitContentDown = useTvFocusStore((s) => s.exitContentDown);
+
+  const [activeShelf, setActiveShelf] = useState(0);
+  const [itemIndex, setItemIndex] = useState(0);
+
+  const hasHistory = history.length > 0;
+  const hasRecent = recent.length > 0;
+  const librariesShelfIndex = hasHistory ? 1 : 0;
+  const recentShelfIndex = librariesShelfIndex + 1;
+
+  // All refs — declared before any effect that reads them.
+  const activeShelfRef = useRef(activeShelf);
+  activeShelfRef.current = activeShelf;
+  const itemIndexRef = useRef(itemIndex);
+  itemIndexRef.current = itemIndex;
+  const historyRef = useRef(history);
+  historyRef.current = history;
+  const librariesRef = useRef(libraries);
+  librariesRef.current = libraries;
+  const recentRef = useRef(recent);
+  recentRef.current = recent;
+  const routerRef = useRef(router);
+  routerRef.current = router;
+  const setZoneRef = useRef(setZone);
+  setZoneRef.current = setZone;
+  const exitContentUpRef = useRef(exitContentUp);
+  exitContentUpRef.current = exitContentUp;
+  const exitContentDownRef = useRef(exitContentDown);
+  exitContentDownRef.current = exitContentDown;
+  const hasHistoryRef = useRef(hasHistory);
+  hasHistoryRef.current = hasHistory;
+  const hasRecentRef = useRef(hasRecent);
+  hasRecentRef.current = hasRecent;
+  const librariesShelfIndexRef = useRef(librariesShelfIndex);
+  librariesShelfIndexRef.current = librariesShelfIndex;
+  const recentShelfIndexRef = useRef(recentShelfIndex);
+  recentShelfIndexRef.current = recentShelfIndex;
 
   const load = useCallback(async () => {
     const [libR, histR] = await Promise.allSettled([
@@ -51,7 +92,8 @@ export default function HomeScreen() {
 
     const libs = libR.status === "fulfilled" ? libR.value : [];
     setLibraries(libs.filter((l) => l.enabled !== 0));
-    setHistory(histR.status === "fulfilled" ? histR.value : []);
+    const hist = histR.status === "fulfilled" ? histR.value : [];
+    setHistory(hist);
 
     if (libs.length === 0) {
       setRecent([]);
@@ -71,43 +113,137 @@ export default function HomeScreen() {
 
   useFocusEffect(
     useCallback(() => {
+      setZone("content");
+      const libShelf = hasHistoryRef.current ? librariesShelfIndexRef.current : 0;
+      activeShelfRef.current = libShelf;
+      itemIndexRef.current = 0;
+      setActiveShelf(libShelf);
+      setItemIndex(0);
       setLoading(true);
       load().finally(() => setLoading(false));
-    }, [load]),
+    }, [load, setZone]),
   );
 
-  const shelfCount = (history.length > 0 ? 1 : 0) + 1 + (recent.length > 0 ? 1 : 0);
-  const [activeShelf, setActiveShelf] = useState(0);
-  const librariesShelfIndex = history.length > 0 ? 1 : 0;
-  const recentShelfIndex = librariesShelfIndex + 1;
+  useMainContentNav(
+    useCallback((evt: TvKeyEvent) => {
+      const type = evt.eventType;
+      if (type === "focus" || type === "blur") return false;
+
+      const shelf = activeShelfRef.current;
+      const hasHist = hasHistoryRef.current;
+      const hasRec = hasRecentRef.current;
+      const libShelfIdx = librariesShelfIndexRef.current;
+      const recShelfIdx = recentShelfIndexRef.current;
+      const shelfCount = (hasHist ? 1 : 0) + 1 + (hasRec ? 1 : 0);
+
+      let data: readonly unknown[];
+      if (hasHist && shelf === 0) data = historyRef.current;
+      else if (shelf === libShelfIdx) data = librariesRef.current;
+      else if (hasRec && shelf === recShelfIdx) data = recentRef.current;
+      else data = [];
+
+      if (data.length === 0) return false;
+
+      if (type === "select") {
+        const idx = itemIndexRef.current;
+        if (hasHist && shelf === 0) {
+          const h = historyRef.current[idx] as HistoryItem | undefined;
+          if (h) routerRef.current.push(`/player/${h.media_id}`);
+        } else if (shelf === libShelfIdx) {
+          const lib = librariesRef.current[idx] as Library | undefined;
+          if (lib) {
+            useMusicPlayerStore.getState().setLyricsExpanded(false);
+            setZoneRef.current("content");
+            routerRef.current.push(`/library/${lib.id}`);
+          }
+        } else if (hasRec && shelf === recShelfIdx) {
+          const item = recentRef.current[idx] as MediaItem | undefined;
+          if (item) routerRef.current.push(`/media/${item.id}`);
+        }
+        return true;
+      }
+
+      if (type === "left") {
+        if (itemIndexRef.current > 0) {
+          const next = itemIndexRef.current - 1;
+          itemIndexRef.current = next;
+          setItemIndex(next);
+        } else {
+          setZoneRef.current("sidebar");
+        }
+        return true;
+      }
+
+      if (type === "right") {
+        if (itemIndexRef.current < data.length - 1) {
+          const next = itemIndexRef.current + 1;
+          itemIndexRef.current = next;
+          setItemIndex(next);
+        }
+        return true;
+      }
+
+      if (type === "up") {
+        if (shelf > 0) {
+          const nextShelf = shelf - 1;
+          activeShelfRef.current = nextShelf;
+          itemIndexRef.current = 0;
+          setActiveShelf(nextShelf);
+          setItemIndex(0);
+        } else {
+          exitContentUpRef.current();
+        }
+        return true;
+      }
+
+      if (type === "down") {
+        if (shelf < shelfCount - 1) {
+          const nextShelf = shelf + 1;
+          activeShelfRef.current = nextShelf;
+          itemIndexRef.current = 0;
+          setActiveShelf(nextShelf);
+          setItemIndex(0);
+        } else {
+          exitContentDownRef.current();
+        }
+        return true;
+      }
+
+      return false;
+    }, []),
+  );
+
+  // After data loads, ensure focus stays on the libraries shelf.
+  useEffect(() => {
+    if (loading) return;
+    const libShelfIdx = librariesShelfIndexRef.current;
+    if (activeShelfRef.current !== libShelfIdx) {
+      activeShelfRef.current = libShelfIdx;
+      itemIndexRef.current = 0;
+      setActiveShelf(libShelfIdx);
+      setItemIndex(0);
+    }
+  }, [loading, history.length]);
 
   if (loading) return <LoadingState label={t("common.loading")} />;
 
-  const contentActive = zone === "content";
-  const shelfDown = (shelfIndex: number) => {
-    if (shelfIndex < shelfCount - 1) setActiveShelf(shelfIndex + 1);
-    else exitContentDown();
-  };
-  const shelfUp = (shelfIndex: number) => {
-    if (shelfIndex > 0) setActiveShelf(shelfIndex - 1);
-    else exitContentUp();
-  };
+  // Compute which item is highlighted on each shelf.
+  const histFocus = hasHistory && activeShelf === 0 ? itemIndex : -1;
+  const libFocus = activeShelf === librariesShelfIndex ? itemIndex : -1;
+  const recentFocus = hasRecent && activeShelf === recentShelfIndex ? itemIndex : -1;
 
   return (
     <Screen>
       <ScrollView contentContainerStyle={styles.scroll}>
         <Text style={styles.brand}>{appName}</Text>
 
-        {history.length > 0 ? (
+        {hasHistory ? (
           <HorizontalShelf
             title={t("home.continue")}
             data={history}
-            enabled={contentActive && activeShelf === 0}
+            focusIndex={histFocus}
             keyExtractor={(h) => String(h.media_id)}
             empty={<Text style={styles.emptyHint}>{t("home.no_continue")}</Text>}
-            onItemPress={(h) => router.push(`/player/${h.media_id}`)}
-            onExitUp={() => shelfUp(0)}
-            onExitDown={() => shelfDown(0)}
             renderItem={(h, _i, { selected }) => (
               <MediaCard
                 tvSelected={selected}
@@ -125,29 +261,27 @@ export default function HomeScreen() {
         <HorizontalShelf
           title={t("home.libraries")}
           data={libraries}
-          enabled={contentActive && activeShelf === librariesShelfIndex}
+          focusIndex={libFocus}
           keyExtractor={(lib) => String(lib.id)}
-          onItemPress={(lib) => router.push(`/library/${lib.id}`)}
-          onExitUp={() => shelfUp(librariesShelfIndex)}
-          onExitDown={() => shelfDown(librariesShelfIndex)}
           renderItem={(lib, _i, { selected }) => (
             <LibraryCard
               library={lib}
               tvSelected={selected}
-              onPress={() => router.push(`/library/${lib.id}`)}
+              onPress={() => {
+                useMusicPlayerStore.getState().setLyricsExpanded(false);
+                setZone("content");
+                router.push(`/library/${lib.id}`);
+              }}
             />
           )}
         />
 
-        {recent.length > 0 ? (
+        {hasRecent ? (
           <HorizontalShelf
             title={t("home.recent")}
             data={recent}
-            enabled={contentActive && activeShelf === recentShelfIndex}
+            focusIndex={recentFocus}
             keyExtractor={(item) => String(item.id)}
-            onItemPress={(item) => router.push(`/media/${item.id}`)}
-            onExitUp={() => shelfUp(recentShelfIndex)}
-            onExitDown={() => shelfDown(recentShelfIndex)}
             renderItem={(item, _i, { selected }) => (
               <MediaCard tvSelected={selected} item={item} onPress={() => router.push(`/media/${item.id}`)} />
             )}

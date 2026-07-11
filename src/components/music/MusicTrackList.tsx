@@ -22,12 +22,15 @@ export default function MusicTrackList({ tracks, onExitLeft }: Props) {
   const playTrack = useMusicPlayerStore((s) => s.playTrack);
   const exitContentUp = useTvFocusStore((s) => s.exitContentUp);
   const exitContentDown = useTvFocusStore((s) => s.exitContentDown);
+  const zone = useTvFocusStore((s) => s.zone);
 
   const sortedTracks = useMemo(
     () => [...tracks].sort((a, b) => (a.title || "").localeCompare(b.title || "", "zh-CN")),
     [tracks],
   );
   const queue = useMemo(() => trackRowsToMusicTracks(sortedTracks), [sortedTracks]);
+  const sortedRef = useRef(sortedTracks);
+  sortedRef.current = sortedTracks;
 
   const playAt = useCallback(
     (mediaId: number) => {
@@ -45,8 +48,9 @@ export default function MusicTrackList({ tracks, onExitLeft }: Props) {
   const { index: focusIndex } = useTvRemoteNav({
     mode: "vertical",
     count: sortedTracks.length,
+    enabled: zone === "content",
     onSelect: (i) => {
-      const row = sortedTracks[i];
+      const row = sortedRef.current[i];
       if (row) playAt(row.media_id);
     },
     onIndexChange: scrollToIndex,
