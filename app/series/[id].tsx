@@ -8,8 +8,9 @@ import {
   fetchSeasonEpisodes,
   fetchSeries,
   fetchSeriesPlayTarget,
+  fetchUserHistory,
 } from "@/api/client";
-import type { EpisodeRow, SeasonSummary, SeriesDetail, SeriesPlayTarget } from "@/api/types";
+import type { EpisodeRow, HistoryItem, SeasonSummary, SeriesDetail, SeriesPlayTarget } from "@/api/types";
 import TvBackButton, { useTvBackHandler } from "@/components/focus/TvBackButton";
 import LoadingState, { Screen } from "@/components/LoadingState";
 import EpisodeList from "@/components/series/EpisodeList";
@@ -58,6 +59,7 @@ export default function SeriesDetailScreen() {
   const [seasons, setSeasons] = useState<SeasonSummary[]>([]);
   const [seasonIndex, setSeasonIndex] = useState(0);
   const [episodes, setEpisodes] = useState<EpisodeRow[]>([]);
+  const [completedMediaIds, setCompletedMediaIds] = useState<Set<number>>(new Set());
   const [playTarget, setPlayTarget] = useState<SeriesPlayTarget | null>(null);
   const [loading, setLoading] = useState(true);
   const [episodesLoading, setEpisodesLoading] = useState(false);
@@ -76,14 +78,22 @@ export default function SeriesDetailScreen() {
     Promise.all([
       fetchSeries(seriesId),
       fetchSeriesPlayTarget(seriesId).catch(() => null),
+      fetchUserHistory(500, { libraryTypes: ["tv"] }).catch(() => [] as HistoryItem[]),
     ])
-      .then(([series, target]) => {
+      .then(([series, target, history]) => {
         if (cancelled) return;
         const sorted = [...(series.seasons ?? [])].sort((a, b) => a.season_num - b.season_num);
         setDetail(series);
         setSeasons(sorted);
         setSeasonIndex(0);
         setPlayTarget(target);
+        const completed = new Set<number>();
+        for (const h of history) {
+          if (h.completed && h.completed > 0 && h.media_id > 0) {
+            completed.add(h.media_id);
+          }
+        }
+        setCompletedMediaIds(completed);
       })
       .catch(() => {
         if (!cancelled) {
@@ -385,6 +395,7 @@ export default function SeriesDetailScreen() {
           ) : (
             <EpisodeList
               episodes={episodes}
+              completedMediaIds={completedMediaIds}
               enabled={focusZone === "episodes" && hasEpisodes}
               onExitUp={() => {
                 if (hasSeasons) setFocusZone("seasons");

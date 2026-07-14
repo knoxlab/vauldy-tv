@@ -11,6 +11,7 @@ import { TV_NAV_ENABLED, useTvRemoteNav } from "@/hooks/useTvRemoteNav";
 
 type Props = {
   episodes: EpisodeRow[];
+  completedMediaIds?: Set<number>;
   enabled?: boolean;
   onExitUp?: () => void;
   onExitLeft?: () => void;
@@ -28,6 +29,7 @@ function episodePosterUrl(ep: EpisodeRow): string {
 
 export default function EpisodeList({
   episodes,
+  completedMediaIds,
   enabled = true,
   onExitUp,
   onExitLeft,
@@ -66,8 +68,11 @@ export default function EpisodeList({
 
   const renderRow = ({ item, index }: ListRenderItemInfo<EpisodeRow>) => {
     const selected = focusIndex >= 0 && focusIndex === index;
-    const playable = pickPrimaryEpisodeMediaId(item) != null;
-    const completed = episodeIsCompleted(item);
+    const primaryMediaId = pickPrimaryEpisodeMediaId(item);
+    const playable = primaryMediaId != null;
+    const completed = completedMediaIds
+      ? completedMediaIds.has(primaryMediaId!)
+      : episodeIsCompleted(item);
     const duration = item.duration ? formatDuration(item.duration) : "—";
     const title = item.title?.trim() || t("series.episode_n", { n: item.episode_num });
     const posterUri = episodePosterUrl(item);
